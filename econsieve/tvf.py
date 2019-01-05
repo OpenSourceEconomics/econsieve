@@ -96,6 +96,7 @@ class TVF(object):
 
         return means, covs, ll
 
+    """
     def rts_smoother(self, means, covs):
 
         SE      = self.Xs[-1]
@@ -110,3 +111,43 @@ class TVF(object):
             covs[i]     = np.cov(SE)
 
         return means, covs
+    """
+
+    def rts_smoother(self, means, covs):
+
+        SE      = self.Xs[-1]
+        ASE     = SE
+
+        # mtd     = 'BFGS'   
+        mtd     = 'L-BFGS-B' 
+        
+        import scipy.optimize as so
+
+        for i in reversed(range(means.shape[0] - 1)):
+
+            # J   = self.X_bars[i] @ nl.pinv(self.X_bar_priors[i+1])
+            J   = self.X_bars[i] @ self.X_bar_priors[i+1].T @ nl.pinv( self.X_bar_priors[i+1] @ self.X_bar_priors[i+1].T )
+            SE  = self.Xs[i] + J @ (ASE - self.X_priors[i+1])
+
+            def target(x_eps):
+
+                x   = x_eps[:self._dim_x]
+                eps = x_eps[self._dim_x:]
+
+                l0  = logpdf(x, mean = np.mean(SE, axis=1), cov = np.cov(SE))
+                l1  = logpdf(self.fx(x), mean = np.mean(ASE, axis=1), cov = np.cov(ASE))
+                l2  = logpdf(eps, mean = np.zeros(self._dim_z), cov = self.R)
+
+                return -l0 -l1 -l2
+
+            res     = so.minimize(target, np.hstack((np.mean(SE, axis=1), np.zeros(self._dim_z))), method = mtd)
+            x       = res['x'][:self._dim_x]
+
+            I1      = np.ones(self.N)
+            ASE     = SE + np.outer(x - np.mean(SE), I1)
+
+            means[i]    = np.mean(ASE, axis=1)
+            covs[i]     = np.cov(ASE)
+
+        return means, covs
+    # """
